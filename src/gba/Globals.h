@@ -37,6 +37,7 @@ extern uint8_t* workRAM;
 extern uint8_t* paletteRAM;
 extern uint8_t* vram;
 extern uint8_t* pix;
+extern uint8_t* pixOBJ;
 extern uint8_t* oam;
 extern uint8_t* ioMem;
 

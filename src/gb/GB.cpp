@@ -29,6 +29,7 @@
 #endif
 
 extern uint8_t* pix;
+extern uint8_t* pixOBJ;
 
 namespace {
 
@@ -489,6 +490,8 @@ bool gbInitializeRom(size_t romSize) {
 bool inBios = false;
 
 extern uint16_t gbLineMix[kGBWidth];
+extern uint16_t gbLineMixOBJ[kGBWidth];
+extern uint16_t gbLineMixTransp[kGBWidth];
 
 // registers
 gbRegister PC;
@@ -2765,6 +2768,11 @@ void gbReset()
     if (pix != nullptr) {
         memset(pix, 0, kGBPixSize);
     }
+        // clean Pix
+    if (pixOBJ != nullptr) {
+        memset(pixOBJ, 0, kGBPixSize);
+    }
+    
     // clean Vram
     if (gbVram != nullptr) {
         memset(gbVram, 0, kGBVRamSize);
@@ -3772,6 +3780,11 @@ void gbCleanUp()
         free(pix);
         pix = nullptr;
     }
+    
+    if (pixOBJ != nullptr) {
+        free(pixOBJ);
+        pixOBJ = nullptr;
+    }
 
     gbSgbShutdown();
 
@@ -3833,6 +3846,10 @@ bool gbLoadRom(const char* filename) {
 
     pix = (uint8_t*)calloc(1, kGBPixSize);
     if (pix == nullptr) {
+        return false;
+    }
+    pixOBJ = (uint8_t*)calloc(1, kGBPixSize);
+    if (pixOBJ == nullptr) {
         return false;
     }
 
@@ -3964,25 +3981,79 @@ void gbDrawLine()
             + gbBorderColumnSkip;
 #endif
         for (size_t x = 0; x < kGBWidth;) {
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
+        *dest++ = systemColorMap32[gbLineMix[x++]] | 0xFF000000;
+        *dest++ = systemColorMap32[gbLineMix[x++]] | 0xFF000000;
+        *dest++ = systemColorMap32[gbLineMix[x++]] | 0xFF000000;
+        *dest++ = systemColorMap32[gbLineMix[x++]] | 0xFF000000;
+        
+        *dest++ = systemColorMap32[gbLineMix[x++]] | 0xFF000000;
+        *dest++ = systemColorMap32[gbLineMix[x++]] | 0xFF000000;
+        *dest++ = systemColorMap32[gbLineMix[x++]] | 0xFF000000;
+        *dest++ = systemColorMap32[gbLineMix[x++]] | 0xFF000000;
+        
+        *dest++ = systemColorMap32[gbLineMix[x++]] | 0xFF000000;
+        *dest++ = systemColorMap32[gbLineMix[x++]] | 0xFF000000;
+        *dest++ = systemColorMap32[gbLineMix[x++]] | 0xFF000000;
+        *dest++ = systemColorMap32[gbLineMix[x++]] | 0xFF000000;
+        
+        *dest++ = systemColorMap32[gbLineMix[x++]] | 0xFF000000;
+        *dest++ = systemColorMap32[gbLineMix[x++]] | 0xFF000000;
+        *dest++ = systemColorMap32[gbLineMix[x++]] | 0xFF000000;
+        *dest++ = systemColorMap32[gbLineMix[x++]] | 0xFF000000;
+        
+        }
+    } break;
+    }
+    
+    // OBJ Layer
+        switch (systemColorDepth) {
+    case 16:
+    case 24:
+    case 32: {
+#ifdef __LIBRETRO__
+        uint32_t* dest = (uint32_t*)pixOBJ + gbBorderLineSkip * (register_LY + gbBorderRowSkip)
+            + gbBorderColumnSkip;
+#else
+        uint32_t* dest = (uint32_t*)pixOBJ + (gbBorderLineSkip + 1) * (register_LY + gbBorderRowSkip + 1)
+            + gbBorderColumnSkip;
+#endif
+        for (size_t x = 0; x < kGBWidth;) {
+        *dest++ = systemColorMap32[gbLineMixOBJ[x]] | (gbLineMixTransp[x] > 0 ? 0xFF000000 : 0x00000000);
+        x++;
+        *dest++ = systemColorMap32[gbLineMixOBJ[x]] | (gbLineMixTransp[x] > 0 ? 0xFF000000 : 0x00000000);
+        x++;
+        *dest++ = systemColorMap32[gbLineMixOBJ[x]] | (gbLineMixTransp[x] > 0 ? 0xFF000000 : 0x00000000);
+        x++;
+        *dest++ = systemColorMap32[gbLineMixOBJ[x]] | (gbLineMixTransp[x] > 0 ? 0xFF000000 : 0x00000000);
+        x++;
+        
+        *dest++ = systemColorMap32[gbLineMixOBJ[x]] | (gbLineMixTransp[x] > 0 ? 0xFF000000 : 0x00000000);
+        x++;
+        *dest++ = systemColorMap32[gbLineMixOBJ[x]] | (gbLineMixTransp[x] > 0 ? 0xFF000000 : 0x00000000);
+        x++;
+        *dest++ = systemColorMap32[gbLineMixOBJ[x]] | (gbLineMixTransp[x] > 0 ? 0xFF000000 : 0x00000000);
+        x++;
+        *dest++ = systemColorMap32[gbLineMixOBJ[x]] | (gbLineMixTransp[x] > 0 ? 0xFF000000 : 0x00000000);
+        x++;
+        
+        *dest++ = systemColorMap32[gbLineMixOBJ[x]] | (gbLineMixTransp[x] > 0 ? 0xFF000000 : 0x00000000);
+        x++;
+        *dest++ = systemColorMap32[gbLineMixOBJ[x]] | (gbLineMixTransp[x] > 0 ? 0xFF000000 : 0x00000000);
+        x++;
+        *dest++ = systemColorMap32[gbLineMixOBJ[x]] | (gbLineMixTransp[x] > 0 ? 0xFF000000 : 0x00000000);
+        x++;
+        *dest++ = systemColorMap32[gbLineMixOBJ[x]] | (gbLineMixTransp[x] > 0 ? 0xFF000000 : 0x00000000);
+        x++;
+        
+        *dest++ = systemColorMap32[gbLineMixOBJ[x]] | (gbLineMixTransp[x] > 0 ? 0xFF000000 : 0x00000000);
+        x++;
+        *dest++ = systemColorMap32[gbLineMixOBJ[x]] | (gbLineMixTransp[x] > 0 ? 0xFF000000 : 0x00000000);
+        x++;
+        *dest++ = systemColorMap32[gbLineMixOBJ[x]] | (gbLineMixTransp[x] > 0 ? 0xFF000000 : 0x00000000);
+        x++;
+        *dest++ = systemColorMap32[gbLineMixOBJ[x]] | (gbLineMixTransp[x] > 0 ? 0xFF000000 : 0x00000000);
+        x++;
+        
         }
     } break;
     }
@@ -4921,6 +4992,10 @@ bool gbLoadRomData(const char* data, size_t size) {
 
     pix = (uint8_t*)calloc(1, kGBPixSize);
     if (pix == nullptr) {
+        return false;
+    }
+    pixOBJ = (uint8_t*)calloc(1, kGBPixSize);
+    if (pixOBJ == nullptr) {
         return false;
     }
 

@@ -30,6 +30,7 @@ uint8_t* workRAM = 0;
 uint8_t* paletteRAM = 0;
 uint8_t* vram = 0;
 uint8_t* pix = 0;
+uint8_t* pixOBJ = 0;
 uint8_t* oam = 0;
 uint8_t* ioMem = 0;
 

@@ -40,12 +40,16 @@ uint8_t gbInvertTab[256] = {
 };
 
 uint16_t gbLineMix[160];
+uint16_t gbLineMixOBJ[160];
+uint16_t gbLineMixTransp[160];
 uint16_t gbWindowColor[160];
 extern int inUseRegister_WY;
 
 void gbRenderLine()
 {
     memset(gbLineMix, 0, sizeof(gbLineMix));
+    memset(gbLineMixOBJ, 0, sizeof(gbLineMix));
+    memset(gbLineMixTransp, 0, sizeof(gbLineMix));
     uint8_t* bank0;
     uint8_t* bank1;
     if (gbCgbMode) {
@@ -517,7 +521,8 @@ void gbDrawSpriteTile(int tile, int x, int y, int t, int flags,
             }
         }
 
-        gbLineMix[xxx] = gbColorOption ? gbColorFilter[gbPalette[c] & 0x7FFF] : gbPalette[c] & 0x7FFF;
+        gbLineMixOBJ[xxx] = gbColorOption ? gbColorFilter[gbPalette[c] & 0x7FFF] : gbPalette[c] & 0x7FFF;
+        gbLineMixTransp[xxx] = 255;
     }
 }
 
@@ -566,7 +571,7 @@ void gbDrawSprites(bool draw)
                 }
             }
             // sprite limit reached!
-            if (count >= 10)
+            if (count >= 16)
                 break;
         }
     }

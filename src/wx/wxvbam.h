@@ -668,6 +668,7 @@ public:
     DrawingPanelBase(int _width, int _height);
     ~DrawingPanelBase();
     void DrawArea(uint8_t** pixels);
+    void DrawArea2L(uint8_t** pixels, uint8_t** pixels2);
 
     virtual void PaintEv(wxPaintEvent& ev);
     virtual void EraseBackground(wxEraseEvent& ev);
@@ -681,8 +682,8 @@ protected:
     double scale;
     virtual void DrawingPanelInit();
     bool did_init;
-    uint8_t* todraw;
-    uint8_t *pixbuf1, *pixbuf2;
+    uint8_t *todraw, *todraw2;
+    uint8_t *pixbuf1, *pixbuf2, *pixbuf3;
     FilterThread* threads;
     int nthreads;
     wxSemaphore filt_done;

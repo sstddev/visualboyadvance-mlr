@@ -1419,6 +1419,7 @@ DrawingPanelBase::DrawingPanelBase(int _width, int _height)
       todraw(0),
       pixbuf1(0),
       pixbuf2(0),
+      pixbuf3(0),
       nthreads(0),
       rpi_(nullptr) {
     memset(delta, 0xff, sizeof(delta));
@@ -1545,6 +1546,7 @@ public:
     int threadno_;
     int width_;
     int height_;
+    int hasAlpha;
     double scale_;
     const RENDER_PLUGIN_INFO* rpi_;
     uint8_t* dst_;
@@ -1601,7 +1603,11 @@ public:
 
             // naturally, any of these with accumulation buffers like those
             // of the IFB filters will screw up royally as well
-            ApplyFilter(instride, outstride);
+            if (hasAlpha > 0) {
+                ApplyFilterAlpha(instride, outstride);
+            } else {
+                ApplyFilter(instride, outstride);
+            }
             if (nthreads_ == 1) {
                 return 0;
             }
@@ -1785,7 +1791,150 @@ private:
                 break;
         }
     }
+
+    void ApplyFilterAlpha(int instride, int outstride) {
+        switch (OPTION(kDispFilter)) {
+        case config::Filter::k2xsai:
+            xbrz2x32A(src_, instride, delta_, dst_, outstride, width_,
+                height_);
+            break;
+
+        case config::Filter::kSuper2xsai:
+            xbrz2x32A(src_, instride, delta_, dst_, outstride, width_,
+                height_);
+            break;
+
+        case config::Filter::kSupereagle:
+            xbrz2x32A(src_, instride, delta_, dst_, outstride, width_,
+                height_);
+            break;
+
+        case config::Filter::kPixelate:
+            Pixelate32(src_, instride, delta_, dst_, outstride, width_,
+                height_);
+            break;
+
+        case config::Filter::kAdvmame:
+            AdMame2x32(src_, instride, delta_, dst_, outstride, width_,
+                height_);
+            break;
+
+        case config::Filter::kBilinear:
+            xbrz2x32A(src_, instride, delta_, dst_, outstride, width_,
+                height_);
+            break;
+
+        case config::Filter::kBilinearplus:
+            xbrz2x32A(src_, instride, delta_, dst_, outstride, width_,
+                height_);
+            break;
+
+        case config::Filter::kScanlines:
+            Scanlines32(src_, instride, delta_, dst_, outstride, width_,
+                height_);
+            break;
+
+        case config::Filter::kTvmode:
+            ScanlinesTV32(src_, instride, delta_, dst_, outstride, width_,
+                height_);
+            break;
+
+        case config::Filter::kLQ2x:
+            xbrz2x32A(src_, instride, delta_, dst_, outstride, width_,
+                height_);
+            break;
+
+        case config::Filter::kSimple2x:
+            Simple2x32(src_, instride, delta_, dst_, outstride, width_,
+                height_);
+            break;
+
+        case config::Filter::kSimple3x:
+            Simple3x32(src_, instride, delta_, dst_, outstride, width_,
+                height_);
+            break;
+
+        case config::Filter::kSimple4x:
+            Simple4x32(src_, instride, delta_, dst_, outstride, width_,
+                height_);
+            break;
+
+        case config::Filter::kHQ2x:
+            xbrz2x32A(src_, instride, delta_, dst_, outstride, width_,
+                height_);
+            break;
+
+        case config::Filter::kHQ3x:
+            xbrz3x32A(src_, instride, delta_, dst_, outstride, width_,
+                height_);
+            break;
+
+        case config::Filter::kHQ4x:
+            xbrz4x32A(src_, instride, delta_, dst_, outstride, width_,
+                height_);
+            break;
+
+        case config::Filter::kXbrz2x:
+            xbrz2x32A(src_, instride, delta_, dst_, outstride, width_,
+                height_);
+            break;
+
+        case config::Filter::kXbrz3x:
+            xbrz3x32A(src_, instride, delta_, dst_, outstride, width_,
+                height_);
+            break;
+
+        case config::Filter::kXbrz4x:
+            xbrz4x32A(src_, instride, delta_, dst_, outstride, width_,
+                height_);
+            break;
+
+        case config::Filter::kXbrz5x:
+            xbrz5x32A(src_, instride, delta_, dst_, outstride, width_,
+                height_);
+            break;
+
+        case config::Filter::kXbrz6x:
+            xbrz6x32A(src_, instride, delta_, dst_, outstride, width_,
+                height_);
+            break;
+
+        case config::Filter::kPlugin:
+            // MFC interface did not do plugins in parallel
+            // Probably because it's almost certain they carry state
+            // or do other non-thread-safe things But the user can
+            // always turn mt off of it's not working..
+            RENDER_PLUGIN_OUTP outdesc;
+            outdesc.Size = sizeof(outdesc);
+            outdesc.Flags = rpi_->Flags;
+            outdesc.SrcPtr = src_;
+            outdesc.SrcPitch = instride;
+            outdesc.SrcW = width_;
+            // FIXME: win32 code adds to H, saying that frame isn't
+            // fully rendered otherwise I need to verify that
+            // statement before I go adding stuff that may make it
+            // crash.
+            outdesc.SrcH = height_;  // + scale / 2
+            outdesc.DstPtr = dst_;
+            outdesc.DstPitch = outstride;
+            outdesc.DstW = std::ceil(width_ * scale_);
+            // on the other hand, there is at least 1 line below, so
+            // I'll add that to dest in case safety checks in plugin
+            // use < instead of <=
+            outdesc.DstH =
+                std::ceil(height_ * scale_);  // + scale * (scale / 2)
+            rpi_->Output(&outdesc);
+            break;
+
+        case config::Filter::kNone:
+        case config::Filter::kLast:
+            assert(false);
+            break;
+        }
+    }
 };
+
+
 
 void DrawingPanelBase::DrawArea(uint8_t** data)
 {
@@ -1829,6 +1978,7 @@ void DrawingPanelBase::DrawArea(uint8_t** data)
                     for (int i = 0; i < nthreads; i++) {
                         threads[i].lock_.Lock();
                         threads[i].src_ = NULL;
+                        threads[i].hasAlpha = 0;
                         threads[i].sig_.Signal();
                         threads[i].lock_.Unlock();
                         threads[i].Wait();
@@ -1850,6 +2000,7 @@ void DrawingPanelBase::DrawArea(uint8_t** data)
             threads[0].dst_ = todraw;
             threads[0].delta_ = delta;
             threads[0].rpi_ = rpi_;
+            threads[0].hasAlpha = 0;
             threads[0].Entry();
 
             // go ahead and start the threads up, though
@@ -1863,6 +2014,7 @@ void DrawingPanelBase::DrawArea(uint8_t** data)
                     threads[i].dst_ = todraw;
                     threads[i].delta_ = delta;
                     threads[i].rpi_ = rpi_;
+                    threads[i].hasAlpha = 0;
                     threads[i].done_ = &filt_done;
                     threads[i].lock_.Lock();
                     threads[i].Create();
@@ -1879,6 +2031,7 @@ void DrawingPanelBase::DrawArea(uint8_t** data)
             threads[0].dst_ = todraw;
             threads[0].delta_ = delta;
             threads[0].rpi_ = rpi_;
+            threads[0].hasAlpha = 0;
             threads[0].Entry();
         } else {
             for (int i = 0; i < nthreads; i++) {
@@ -1898,6 +2051,319 @@ void DrawingPanelBase::DrawArea(uint8_t** data)
         *data = pixbuf1;
     }
 
+    // draw OSD text old-style (directly into output buffer), if needed
+    // new style flickers too much, so we'll stick to this for now
+    if (wxGetApp().frame->IsFullScreen() || !OPTION(kGenStatusBar)) {
+        GameArea* panel = wxGetApp().frame->GetPanel();
+
+        if (panel->osdstat.size())
+            drawText(todraw + outstride * (systemColorDepth != 24), outstride,
+                10, 20, UTF8(panel->osdstat), OPTION(kPrefShowSpeedTransparent));
+
+        if (!OPTION(kPrefDisableStatus) && !panel->osdtext.empty()) {
+            if (systemGetClock() - panel->osdtime < OSD_TIME) {
+                wxString message = panel->osdtext;
+                int linelen = std::ceil(width * scale - 20) / 8;
+                int nlines = (message.size() + linelen - 1) / linelen;
+                int cury = height - 14 - nlines * 10;
+                char* buf = strdup(UTF8(message));
+                char* ptr = buf;
+
+                while (nlines > 1) {
+                    char lchar = ptr[linelen];
+                    ptr[linelen] = 0;
+                    drawText(todraw + outstride * (systemColorDepth != 24),
+                        outstride, 10, cury, ptr,
+                        OPTION(kPrefShowSpeedTransparent));
+                    cury += 10;
+                    nlines--;
+                    ptr += linelen;
+                    *ptr = lchar;
+                }
+
+                drawText(todraw + outstride * (systemColorDepth != 24),
+                    outstride, 10, cury, ptr,
+                    OPTION(kPrefShowSpeedTransparent));
+
+                free(buf);
+                buf = NULL;
+            } else
+                panel->osdtext.clear();
+        }
+    }
+
+    // next, draw the frame (queue a PaintEv) Refresh must be used under
+    // Wayland or nothing is drawn.
+    if (wxGetApp().UsingWayland())
+        GetWindow()->Refresh();
+    else {
+        DrawingPanelBase* panel = wxGetApp().frame->GetPanel()->panel;
+        if (panel) {
+            wxClientDC dc(panel->GetWindow());
+            panel->DrawArea(dc);
+        }
+    }
+
+    // finally, draw on-screen text using wx method, if possible
+    // this method flickers too much right now
+    //DrawOSD(dc);
+}
+
+void DrawingPanelBase::DrawArea2L(uint8_t** data, uint8_t** data2)
+{
+    // double-buffer buffer:
+    //   if filtering, this is filter output, retained for redraws
+    //   if not filtering, we still retain current image for redraws
+    int outbpp = out_16 ? 2 : systemColorDepth == 24 ? 3 : 4;
+    int outrb = systemColorDepth == 24 ? 0 : 4;
+    int outstride = std::ceil(width * outbpp * scale) + outrb;
+
+    if (!pixbuf2) {
+        int allocstride = outstride, alloch = height;
+
+        // gb may write borders, so allocate enough for them
+        if (width == GameArea::GBWidth && height == GameArea::GBHeight) {
+            allocstride = std::ceil(GameArea::SGBWidth * outbpp * scale) + outrb;
+            alloch = GameArea::SGBHeight;
+        }
+
+        pixbuf2 = (uint8_t*)calloc(allocstride, std::ceil((alloch + 2) * scale));
+    }
+
+    if (!pixbuf3) {
+        int allocstride = outstride, alloch = height;
+
+        // gb may write borders, so allocate enough for them
+        if (width == GameArea::GBWidth && height == GameArea::GBHeight) {
+            allocstride = std::ceil(GameArea::SGBWidth * outbpp * scale) + outrb;
+            alloch = GameArea::SGBHeight;
+        }
+
+        pixbuf3 = (uint8_t*)calloc(allocstride, std::ceil((alloch + 2) * scale));
+    }
+    
+    if (OPTION(kDispFilter) == config::Filter::kNone) {
+        todraw = *data;
+        // *data is assigned below, after old buf has been processed
+        pixbuf1 = pixbuf2;
+        pixbuf2 = todraw;
+    } else
+        todraw = pixbuf2;
+        todraw2 = pixbuf3;
+
+    // FIXME: filters race condition?
+    const int max_threads = 1;
+
+    // First, apply filters, if applicable, in parallel, if enabled
+    // FIXME: && (gopts.ifb != FF_MOTION_BLUR || !renderer_can_motion_blur)
+    if (OPTION(kDispFilter) != config::Filter::kNone ||
+        OPTION(kDispIFB) != config::Interframe::kNone) {
+        if (nthreads != max_threads) {
+            if (nthreads) {
+                if (nthreads > 1)
+                    for (int i = 0; i < nthreads; i++) {
+                        threads[i].lock_.Lock();
+                        threads[i].src_ = NULL;
+                        threads[i].hasAlpha = 1;
+                        threads[i].sig_.Signal();
+                        threads[i].lock_.Unlock();
+                        threads[i].Wait();
+                    }
+
+                delete[] threads;
+            }
+
+            nthreads = max_threads;
+            threads = new FilterThread[nthreads];
+            // first time around, no threading in order to avoid
+            // static initializer conflicts
+            threads[0].threadno_ = 0;
+            threads[0].nthreads_ = 1;
+            threads[0].width_ = width;
+            threads[0].height_ = height;
+            threads[0].scale_ = scale;
+            threads[0].src_ = *data2;
+            threads[0].dst_ = todraw2;
+            threads[0].delta_ = delta;
+            threads[0].rpi_ = rpi_;
+            threads[0].hasAlpha = 1;
+            threads[0].Entry();
+
+            // go ahead and start the threads up, though
+            if (nthreads > 1) {
+                for (int i = 0; i < nthreads; i++) {
+                    threads[i].threadno_ = i;
+                    threads[i].nthreads_ = nthreads;
+                    threads[i].width_ = width;
+                    threads[i].height_ = height;
+                    threads[i].scale_ = scale;
+                    threads[i].dst_ = todraw2;
+                    threads[i].delta_ = delta;
+                    threads[i].rpi_ = rpi_;
+                    threads[i].hasAlpha = 1;
+                    threads[i].done_ = &filt_done;
+                    threads[i].lock_.Lock();
+                    threads[i].Create();
+                    threads[i].Run();
+                }
+            }
+        } else if (nthreads == 1) {
+            threads[0].threadno_ = 0;
+            threads[0].nthreads_ = 1;
+            threads[0].width_ = width;
+            threads[0].height_ = height;
+            threads[0].scale_ = scale;
+            threads[0].src_ = *data2;
+            threads[0].dst_ = todraw2;
+            threads[0].delta_ = delta;
+            threads[0].rpi_ = rpi_;
+            threads[0].hasAlpha = 1;
+            threads[0].Entry();
+        } else {
+            for (int i = 0; i < nthreads; i++) {
+                threads[i].lock_.Lock();
+                threads[i].src_ = *data;
+                threads[i].sig_.Signal();
+                threads[i].lock_.Unlock();
+            }
+
+            for (int i = 0; i < nthreads; i++)
+                filt_done.Wait();
+        }
+    }
+
+    // First, apply filters, if applicable, in parallel, if enabled
+    // FIXME: && (gopts.ifb != FF_MOTION_BLUR || !renderer_can_motion_blur)
+    if (OPTION(kDispFilter) != config::Filter::kNone ||
+        OPTION(kDispIFB) != config::Interframe::kNone) {
+        if (nthreads != max_threads) {
+            if (nthreads) {
+                if (nthreads > 1)
+                    for (int i = 0; i < nthreads; i++) {
+                        threads[i].lock_.Lock();
+                        threads[i].src_ = NULL;
+                        threads[i].hasAlpha = 0;
+                        threads[i].sig_.Signal();
+                        threads[i].lock_.Unlock();
+                        threads[i].Wait();
+                    }
+
+                delete[] threads;
+            }
+
+            nthreads = max_threads;
+            threads = new FilterThread[nthreads];
+            // first time around, no threading in order to avoid
+            // static initializer conflicts
+            threads[0].threadno_ = 0;
+            threads[0].nthreads_ = 1;
+            threads[0].width_ = width;
+            threads[0].height_ = height;
+            threads[0].scale_ = scale;
+            threads[0].src_ = *data;
+            threads[0].dst_ = todraw;
+            threads[0].delta_ = delta;
+            threads[0].rpi_ = rpi_;
+            threads[0].hasAlpha = 0;
+            threads[0].Entry();
+
+            // go ahead and start the threads up, though
+            if (nthreads > 1) {
+                for (int i = 0; i < nthreads; i++) {
+                    threads[i].threadno_ = i;
+                    threads[i].nthreads_ = nthreads;
+                    threads[i].width_ = width;
+                    threads[i].height_ = height;
+                    threads[i].scale_ = scale;
+                    threads[i].dst_ = todraw;
+                    threads[i].delta_ = delta;
+                    threads[i].rpi_ = rpi_;
+                    threads[i].hasAlpha = 0;
+                    threads[i].done_ = &filt_done;
+                    threads[i].lock_.Lock();
+                    threads[i].Create();
+                    threads[i].Run();
+                }
+            }
+        } else if (nthreads == 1) {
+            threads[0].threadno_ = 0;
+            threads[0].nthreads_ = 1;
+            threads[0].width_ = width;
+            threads[0].height_ = height;
+            threads[0].scale_ = scale;
+            threads[0].src_ = *data;
+            threads[0].dst_ = todraw;
+            threads[0].delta_ = delta;
+            threads[0].rpi_ = rpi_;
+            threads[0].hasAlpha = 0;
+            threads[0].Entry();
+        } else {
+            for (int i = 0; i < nthreads; i++) {
+                threads[i].lock_.Lock();
+                threads[i].src_ = *data;
+                threads[i].sig_.Signal();
+                threads[i].lock_.Unlock();
+            }
+
+            for (int i = 0; i < nthreads; i++)
+                filt_done.Wait();
+        }
+    }
+    
+    // swap buffers now that src has been processed
+    if (OPTION(kDispFilter) == config::Filter::kNone) {
+        *data = pixbuf1;
+        todraw2 = *data2;
+    }
+
+    // fast channel mixer
+    // accurate enough for this colorspace
+    int numPix = (outstride * std::ceil((height + 2) * scale)) / 4;
+    for (int x = 0; x < numPix; x++){
+
+        uint32_t BG = ((uint32_t*)todraw)[x];
+        uint32_t OBJ = ((uint32_t*)todraw2)[x];
+        
+        switch (OBJ>>28)
+        {
+        case 0:
+            ((uint32_t*)todraw)[x] = BG | (uint32_t) 0xFF000000U;
+            break;
+        case 1:
+        case 2:
+            ((uint32_t*)todraw)[x] = (BG + ((OBJ >> 3) & (uint32_t) 0x001F1F1FU) - ((BG >> 3) & (uint32_t) 0x001F1F1FU)) | (uint32_t) 0xFF000000U;
+            break;
+        case 3:
+        case 4:
+            ((uint32_t*)todraw)[x] = (((BG >> 1) & (uint32_t) 0x007F7F7FU) + ((OBJ >> 2) & (uint32_t) 0x003F3F3FU) + ((BG >> 2) & (uint32_t) 0x003F3F3FU)) | (uint32_t) 0xFF000000U;
+            break;
+        case 5:
+        case 6:
+            ((uint32_t*)todraw)[x] = (((BG >> 1) & (uint32_t) 0x007F7F7FU) + ((OBJ >> 1) & (uint32_t) 0x007F7F7FU) + ((BG >> 3) & (uint32_t) 0x001F1F1FU) - ((OBJ >> 3) & (uint32_t) 0x001F1F1FU)) | (uint32_t) 0xFF000000U;
+            break;
+        case 7:
+        case 8:
+            ((uint32_t*)todraw)[x] = (((BG >> 1) & (uint32_t) 0x007F7F7FU) + ((OBJ >> 1) & (uint32_t) 0x007F7F7FU)) | (uint32_t) 0xFF000000U;
+            break;
+        case 9:
+        case 10:
+            ((uint32_t*)todraw)[x] = (((BG >> 1) & (uint32_t) 0x007F7F7FU) + ((OBJ >> 1) & (uint32_t) 0x007F7F7FU) + ((OBJ >> 3) & (uint32_t) 0x001F1F1FU) - ((BG >> 3) & (uint32_t) 0x001F1F1FU)) | (uint32_t) 0xFF000000U;
+            break;
+        case 11:
+        case 12:
+            ((uint32_t*)todraw)[x] = (((OBJ >> 1) & (uint32_t) 0x007F7F7FU) + ((OBJ >> 2) & (uint32_t) 0x003F3F3FU) + ((BG >> 2) & (uint32_t) 0x003F3F3FU)) | (uint32_t) 0xFF000000U;
+            break;
+        case 13:
+        case 14:
+            ((uint32_t*)todraw)[x] = (OBJ + ((BG >> 3) & (uint32_t) 0x001F1F1FU) - ((OBJ >> 3) & (uint32_t) 0x001F1F1FU)) | (uint32_t) 0xFF000000U;
+            break;
+        case 15:
+            ((uint32_t*)todraw)[x] = OBJ | (uint32_t) 0xFF000000U;
+        }
+        
+        
+    }
+    
     // draw OSD text old-style (directly into output buffer), if needed
     // new style flickers too much, so we'll stick to this for now
     if (wxGetApp().frame->IsFullScreen() || !OPTION(kGenStatusBar)) {

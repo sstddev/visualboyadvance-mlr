@@ -102,7 +102,12 @@ void systemDrawScreen()
 #endif
 
     if (ga && ga->panel)
-        ga->panel->DrawArea(&pix);
+        if (ga->emusys == &GBSystem) {
+            ga->panel->DrawArea2L(&pix, &pixOBJ);
+        }
+        else {
+            ga->panel->DrawArea(&pix);
+        }
 }
 
 // record a game "movie"
