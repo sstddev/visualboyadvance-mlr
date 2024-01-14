@@ -2316,15 +2316,39 @@ void DrawingPanelBase::DrawArea2L(uint8_t** data, uint8_t** data2)
         todraw2 = *data2;
     }
 
+    // accurate channel mixer
+
+    int numPix = (outstride * std::ceil((height + 2) * scale));
+    for (int x = 0; x < numPix;) {
+
+        uint16_t R_BG = ((uint8_t*)todraw)[x];
+        uint16_t G_BG = ((uint8_t*)todraw)[x+1];
+        uint16_t B_BG = ((uint8_t*)todraw)[x+2];
+
+        uint16_t R_OBJ = ((uint8_t*)todraw2)[x];
+        uint16_t G_OBJ = ((uint8_t*)todraw2)[x+1];
+        uint16_t B_OBJ = ((uint8_t*)todraw2)[x+2];
+
+        uint8_t A = ((uint8_t*)todraw2)[x + 3];
+        uint8_t Ai = ~A;
+
+        uint16_t R = ((R_OBJ * A) + (R_BG * Ai)) / (uint8_t) 0xFFU;
+        uint16_t G = ((G_OBJ * A) + (G_BG * Ai)) / (uint8_t) 0xFFU;
+        uint16_t B = ((B_OBJ * A) + (B_BG * Ai)) / (uint8_t) 0xFFU;
+
+        ((uint8_t*)todraw)[x++] = (uint8_t) R;
+        ((uint8_t*)todraw)[x++] = (uint8_t) G;
+        ((uint8_t*)todraw)[x++] = (uint8_t) B;
+        ((uint8_t*)todraw)[x++] = (uint8_t) 0xFFU;
+    }
+
+    /*
+    
     // fast channel mixer
-    // accurate enough for this colorspace
     int numPix = (outstride * std::ceil((height + 2) * scale)) / 4;
     for (int x = 0; x < numPix; x++){
 
-        uint32_t BG = ((uint32_t*)todraw)[x];
-        uint32_t OBJ = ((uint32_t*)todraw2)[x];
-        
-        switch (OBJ>>28)
+       switch (OBJ>>28)
         {
         case 0:
             ((uint32_t*)todraw)[x] = BG | (uint32_t) 0xFF000000U;
@@ -2362,7 +2386,7 @@ void DrawingPanelBase::DrawArea2L(uint8_t** data, uint8_t** data2)
         }
         
         
-    }
+    }*/
     
     // draw OSD text old-style (directly into output buffer), if needed
     // new style flickers too much, so we'll stick to this for now
